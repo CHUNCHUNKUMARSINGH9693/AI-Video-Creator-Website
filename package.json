@@ -1,0 +1,20 @@
+{
+  "name": "ai-video-creator-root",
+  "version": "1.0.0",
+  "description": "AI Video Creator - Full-stack AI video generation and editing SaaS platform",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install && npm run install:server && npm run install:client",
+    "install:server": "cd server && npm install",
+    "install:client": "cd client && npm install",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "start": "cd server && npm start",
+    "setup:db": "cd server && node scripts/init-db.js",
+    "build": "cd client && npm run build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
