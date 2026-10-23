@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   Sparkles,
   Film,
@@ -26,6 +26,7 @@ import {
 import api from '../services/api';
 import { useToast } from '../context/ToastContext';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import DownloadButton from '../components/media/DownloadButton';
 
 export default function CreateVideoPage() {
   const navigate = useNavigate();
@@ -147,22 +148,25 @@ export default function CreateVideoPage() {
       try {
         const res = await api.get(`/videos/${activeJob.projectId}/status`);
         if (res.data.success) {
-          const jobData = res.data.job;
-          const projectStatus = res.data.projectStatus;
+          const jobData = res.data.job || {};
+          const projectStatus = res.data.projectStatus || res.data.status;
+          const progress = res.data.progress ?? jobData.progress ?? (projectStatus === 'completed' ? 100 : 0);
+          const step = res.data.step || jobData.step || (projectStatus === 'completed' ? 'Completed' : 'Processing');
+          const videoUrl = res.data.videoUrl;
 
           setActiveJob((prev) => ({
             ...prev,
             status: projectStatus,
-            progress: jobData.progress || prev.progress,
-            step: jobData.step || prev.step,
-            videoUrl: res.data.videoUrl,
+            progress: progress || prev.progress,
+            step: step || prev.step,
+            videoUrl: videoUrl || prev.videoUrl,
           }));
 
           if (projectStatus === 'completed') {
             toast.success('Your AI Video is ready!');
             clearInterval(interval);
           } else if (projectStatus === 'failed') {
-            toast.error(jobData.error || 'Generation encountered an error.');
+            toast.error(res.data.error || jobData.error || 'Generation encountered an error.');
             clearInterval(interval);
           }
         }
@@ -248,10 +252,32 @@ export default function CreateVideoPage() {
             />
           </div>
 
+          {/* Completed Video Player Preview */}
+          {activeJob.status === 'completed' && activeJob.videoUrl && (
+            <div className="rounded-2xl overflow-hidden border border-brand-500/30 bg-black aspect-video max-h-80 mx-auto shadow-2xl relative">
+              <video
+                src={activeJob.videoUrl}
+                controls
+                autoPlay
+                className="w-full h-full object-contain"
+              />
+            </div>
+          )}
+
           {/* Action buttons upon completion or in progress */}
           <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
             {activeJob.status === 'completed' ? (
-              <div className="flex items-center gap-3 w-full sm:w-auto">
+              <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                <DownloadButton
+                  project={{
+                    id: activeJob.projectId,
+                    status: 'completed',
+                    video_url: activeJob.videoUrl,
+                    title: title || prompt.slice(0, 30),
+                    aspect_ratio: aspectRatio,
+                  }}
+                  buttonSize="md"
+                />
                 <button
                   onClick={() => navigate(`/editor/${activeJob.projectId}`)}
                   className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs shadow-lg shadow-brand-600/25 transition-all"
@@ -296,6 +322,49 @@ export default function CreateVideoPage() {
           </div>
         </div>
       )}
+
+      {/* Specialized Studios Quick Banner */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Link
+          to="/create/audio-to-video"
+          className="p-4 rounded-2xl bg-gradient-to-r from-indigo-950/60 to-dark-card border border-indigo-500/30 hover:border-brand-500/60 transition-all flex items-center justify-between group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
+              <Music className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-xs sm:text-sm font-bold text-white group-hover:text-brand-300 transition-colors">
+                Audio to Video Creator &rarr;
+              </h3>
+              <p className="text-[11px] text-slate-400">Upload audio/music & auto-sync with stock photos</p>
+            </div>
+          </div>
+          <span className="text-[10px] uppercase font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+            Dedicated
+          </span>
+        </Link>
+
+        <Link
+          to="/create/image-to-video"
+          className="p-4 rounded-2xl bg-gradient-to-r from-rose-950/60 to-dark-card border border-rose-500/30 hover:border-brand-500/60 transition-all flex items-center justify-between group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0">
+              <ImageIcon className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-xs sm:text-sm font-bold text-white group-hover:text-rose-300 transition-colors">
+                Images to Video Creator &rarr;
+              </h3>
+              <p className="text-[11px] text-slate-400">Animate photos with Ken Burns pan & zoom timeline</p>
+            </div>
+          </div>
+          <span className="text-[10px] uppercase font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
+            Dedicated
+          </span>
+        </Link>
+      </div>
 
       {/* Main Form */}
       <form onSubmit={handleStartGeneration} className="space-y-8">

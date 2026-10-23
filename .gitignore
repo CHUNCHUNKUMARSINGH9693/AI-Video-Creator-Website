@@ -26,12 +26,18 @@ pids
 # Build outputs
 dist/
 build/
+client/dist/
+*.tsbuildinfo
 
 # Uploads & Temporary video media
 uploads/temp/*
 uploads/generated/*.mp4
 uploads/generated/*.png
 uploads/generated/*.jpg
+uploads/images/*.png
+uploads/images/*.jpg
+uploads/images/*.jpeg
+uploads/images/*.webp
 uploads/audio/*.mp3
 uploads/subtitles/*.srt
 uploads/thumbnails/*.jpg
@@ -40,6 +46,7 @@ uploads/thumbnails/*.webp
 !uploads/samples/
 !uploads/temp/.gitkeep
 !uploads/generated/.gitkeep
+!uploads/images/.gitkeep
 !uploads/audio/.gitkeep
 !uploads/subtitles/.gitkeep
 !uploads/avatars/.gitkeep

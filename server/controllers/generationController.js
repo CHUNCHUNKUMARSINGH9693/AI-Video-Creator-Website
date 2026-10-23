@@ -75,12 +75,23 @@ async function getGenerationStatus(req, res) {
     }
 
     const jobStatus = await generationQueue.getStatus(parseInt(id, 10));
+    const project = projects[0];
+    const status = project.status === 'completed'
+      ? 'completed'
+      : (jobStatus ? (jobStatus.status || jobStatus.job_status || project.status) : project.status);
+    const progress = jobStatus ? (jobStatus.progress ?? jobStatus.progress_percentage ?? (status === 'completed' ? 100 : 0)) : (status === 'completed' ? 100 : 0);
+    const step = jobStatus ? (jobStatus.step || jobStatus.current_step || '') : (status === 'completed' ? 'Completed' : 'Processing');
+    const error = jobStatus ? (jobStatus.error || jobStatus.error_message) : project.error_message;
 
     return res.json({
       success: true,
-      projectStatus: projects[0].status,
-      videoUrl: projects[0].video_url,
-      thumbnailUrl: projects[0].thumbnail_url,
+      status,
+      progress,
+      step,
+      error,
+      projectStatus: project.status,
+      videoUrl: project.video_url,
+      thumbnailUrl: project.thumbnail_url,
       job: jobStatus,
     });
   } catch (error) {

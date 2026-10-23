@@ -14,6 +14,9 @@ import {
   Sliders,
   ChevronRight,
   TrendingUp,
+  Music,
+  Image as ImageIcon,
+  Layers,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
@@ -76,7 +79,7 @@ export default function DashboardPage() {
               Welcome back, {user?.name || 'Creator'}!
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-xl">
-              Ready to generate your next engaging video? Enter a prompt or explore your project library.
+              Ready to generate your next engaging video? Choose one of our specialized workflows or start from a prompt.
             </p>
           </div>
 
@@ -100,6 +103,117 @@ export default function DashboardPage() {
 
         {/* Decorative blur backdrop */}
         <div className="absolute right-0 top-0 w-80 h-80 bg-brand-500/10 rounded-full blur-3xl pointer-events-none -z-0" />
+      </div>
+
+      {/* Featured Core Studios: Audio-to-Video & Images-to-Video */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-brand-400" />
+            <h2 className="text-base font-bold text-white">Video Creation Studios</h2>
+          </div>
+          <span className="text-xs text-slate-400">Powered by Free Stock APIs & FFmpeg</span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Option 1: Audio to Video */}
+          <div className="group relative rounded-3xl p-6 sm:p-7 bg-gradient-to-br from-indigo-950/70 via-dark-card to-dark-surface border border-indigo-500/30 hover:border-brand-500/60 shadow-xl transition-all duration-300 hover:-translate-y-1 overflow-hidden flex flex-col justify-between">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-500/40 text-indigo-400 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                  <Music className="w-6 h-6" />
+                </div>
+                <span className="px-3 py-1 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 text-xs font-semibold">
+                  Audio & Speech Sync
+                </span>
+              </div>
+
+              <div className="space-y-1.5">
+                <h3 className="text-lg sm:text-xl font-heading font-extrabold text-white group-hover:text-brand-300 transition-colors">
+                  Audio to Video
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                  Upload any MP3, podcast, speech, or music file. The system extracts duration, detects spoken topics, pairs them with real royalty-free photographs from Pexels & Unsplash, and renders an auto-synced MP4 video.
+                </p>
+              </div>
+
+              {/* Feature Pills */}
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                <span className="text-[11px] px-2.5 py-0.5 rounded-lg bg-dark-bg/80 border border-slate-700/80 text-slate-300">
+                  Waveform Visualizer
+                </span>
+                <span className="text-[11px] px-2.5 py-0.5 rounded-lg bg-dark-bg/80 border border-slate-700/80 text-slate-300">
+                  Free Pexels & Unsplash
+                </span>
+                <span className="text-[11px] px-2.5 py-0.5 rounded-lg bg-dark-bg/80 border border-slate-700/80 text-slate-300">
+                  Auto Scene Matching
+                </span>
+              </div>
+            </div>
+
+            <div className="pt-6">
+              <Link
+                to="/create/audio-to-video"
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-brand-600 hover:from-indigo-500 hover:to-brand-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2"
+              >
+                Launch Audio to Video
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </Link>
+            </div>
+
+            {/* Ambient background glow */}
+            <div className="absolute right-0 bottom-0 w-48 h-48 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
+          </div>
+
+          {/* Option 2: Images to Video */}
+          <div className="group relative rounded-3xl p-6 sm:p-7 bg-gradient-to-br from-rose-950/70 via-dark-card to-dark-surface border border-rose-500/30 hover:border-brand-500/60 shadow-xl transition-all duration-300 hover:-translate-y-1 overflow-hidden flex flex-col justify-between">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center shadow-lg shadow-rose-500/20">
+                  <ImageIcon className="w-6 h-6" />
+                </div>
+                <span className="px-3 py-1 rounded-full bg-rose-500/10 text-rose-300 border border-rose-500/20 text-xs font-semibold">
+                  Ken Burns Pan & Zoom
+                </span>
+              </div>
+
+              <div className="space-y-1.5">
+                <h3 className="text-lg sm:text-xl font-heading font-extrabold text-white group-hover:text-rose-300 transition-colors">
+                  Images to Video
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                  Turn single or multiple photographs into high-definition animated videos with cinematic Ken Burns camera motions, custom scene durations, smooth crossfades, text captions, and synchronized soundtrack.
+                </p>
+              </div>
+
+              {/* Feature Pills */}
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                <span className="text-[11px] px-2.5 py-0.5 rounded-lg bg-dark-bg/80 border border-slate-700/80 text-slate-300">
+                  Multi-Image Timeline
+                </span>
+                <span className="text-[11px] px-2.5 py-0.5 rounded-lg bg-dark-bg/80 border border-slate-700/80 text-slate-300">
+                  Ken Burns Pan & Zoom
+                </span>
+                <span className="text-[11px] px-2.5 py-0.5 rounded-lg bg-dark-bg/80 border border-slate-700/80 text-slate-300">
+                  Music Sync
+                </span>
+              </div>
+            </div>
+
+            <div className="pt-6">
+              <Link
+                to="/create/image-to-video"
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-rose-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-rose-600/30 transition-all flex items-center justify-center gap-2"
+              >
+                Launch Images to Video
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </Link>
+            </div>
+
+            {/* Ambient background glow */}
+            <div className="absolute right-0 bottom-0 w-48 h-48 bg-rose-500/10 rounded-full blur-2xl pointer-events-none" />
+          </div>
+        </div>
       </div>
 
       {/* Metrics Row */}

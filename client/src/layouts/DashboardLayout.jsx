@@ -16,6 +16,8 @@ import {
   User,
   PlusCircle,
   HelpCircle,
+  Music,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -36,7 +38,9 @@ export default function DashboardLayout() {
 
   const navItems = [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { label: 'Create Video', path: '/create', icon: PlusCircle, badge: 'AI' },
+    { label: 'Audio to Video', path: '/create/audio-to-video', icon: Music, badge: 'New' },
+    { label: 'Images to Video', path: '/create/image-to-video', icon: ImageIcon, badge: 'New' },
+    { label: 'Prompt Studio', path: '/create', icon: PlusCircle, badge: 'AI' },
     { label: 'Video Library', path: '/library', icon: Film },
     { label: 'Social Accounts', path: '/social', icon: Share2 },
     { label: 'Pricing & Plans', path: '/pricing', icon: CreditCard },

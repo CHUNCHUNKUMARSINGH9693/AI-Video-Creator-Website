@@ -9,6 +9,7 @@ const DIRECTORIES = {
   root: UPLOADS_DIR,
   generated: path.join(UPLOADS_DIR, 'generated'),
   temp: path.join(UPLOADS_DIR, 'temp'),
+  images: path.join(UPLOADS_DIR, 'images'),
   audio: path.join(UPLOADS_DIR, 'audio'),
   subtitles: path.join(UPLOADS_DIR, 'subtitles'),
   avatars: path.join(UPLOADS_DIR, 'avatars'),
@@ -98,6 +99,57 @@ function cleanTempDirectory(hoursOld = 6) {
   }
 }
 
+/**
+ * Download a remote image or file to local storage for FFmpeg processing
+ */
+async function downloadRemoteFile(remoteUrl, targetDir = DIRECTORIES.images, prefix = 'img') {
+  if (!remoteUrl) throw new Error('Remote URL is required');
+
+  // If already a local file or uploads path, return directly
+  if (remoteUrl.startsWith('/uploads/') || remoteUrl.startsWith('uploads/') || !remoteUrl.startsWith('http')) {
+    const cleanKey = remoteUrl.replace(/^\//, '');
+    return {
+      storageKey: cleanKey,
+      absolutePath: getAbsolutePath(cleanKey),
+    };
+  }
+
+  const response = await fetch(remoteUrl, {
+    headers: {
+      'User-Agent': 'AIVideoCreator/1.0',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to download remote asset (${response.status} ${response.statusText}): ${remoteUrl}`);
+  }
+
+  // Determine file extension
+  let ext = '.jpg';
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('png')) ext = '.png';
+  else if (contentType.includes('webp')) ext = '.webp';
+  else if (contentType.includes('gif')) ext = '.gif';
+  else if (contentType.includes('mp4')) ext = '.mp4';
+  else if (contentType.includes('mpeg') || contentType.includes('mp3')) ext = '.mp3';
+  else if (contentType.includes('wav')) ext = '.wav';
+
+  const filename = `${prefix}_${Date.now()}_${uuidv4().substring(0, 8)}${ext}`;
+  const targetPath = path.join(targetDir, filename);
+
+  const arrayBuffer = await response.arrayBuffer();
+  fs.writeFileSync(targetPath, Buffer.from(arrayBuffer));
+
+  const relativeStorageKey = path.relative(ROOT_DIR, targetPath).replace(/\\/g, '/');
+
+  return {
+    storageKey: relativeStorageKey,
+    absolutePath: targetPath,
+    filename,
+    fileSize: arrayBuffer.byteLength,
+  };
+}
+
 module.exports = {
   DIRECTORIES,
   initDirectories,
@@ -106,4 +158,5 @@ module.exports = {
   getPublicUrl,
   removeFile,
   cleanTempDirectory,
+  downloadRemoteFile,
 };

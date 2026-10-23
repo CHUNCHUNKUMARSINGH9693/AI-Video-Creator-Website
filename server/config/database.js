@@ -96,6 +96,7 @@ const memoryStore = {
     },
   ],
   social_accounts: [],
+  video_scenes: [],
   autoId: {
     users: 2,
     video_projects: 2,
@@ -104,6 +105,7 @@ const memoryStore = {
     video_exports: 1,
     subtitles: 2,
     social_accounts: 1,
+    video_scenes: 1,
   },
 };
 
@@ -233,10 +235,34 @@ function executeInMemory(sql, params = []) {
       return memoryStore.social_accounts.filter((s) => s.user_id === uId);
     }
 
-    // VIDEO EXPORTS: by project_id
-    if (lower.includes('from video_exports') && lower.includes('where e.project_id = ?')) {
+    // VIDEO SCENES: by project_id
+    if (lower.includes('from video_scenes') && lower.includes('project_id = ?')) {
       const pId = parseInt(params[0], 10);
-      return memoryStore.video_exports.filter((e) => e.project_id === pId);
+      return (memoryStore.video_scenes || [])
+        .filter((s) => s.project_id === pId)
+        .sort((a, b) => (a.scene_order || 0) - (b.scene_order || 0))
+        .map((s) => ({ ...s }));
+    }
+
+    // VIDEO SCENES: by id
+    if (lower.includes('from video_scenes where id = ?')) {
+      const id = parseInt(params[0], 10);
+      return (memoryStore.video_scenes || []).filter((s) => s.id === id).map((s) => ({ ...s }));
+    }
+
+    // VIDEO EXPORTS: by project_id
+    if (lower.includes('from video_exports') && lower.includes('project_id = ?')) {
+      const pId = parseInt(params[0], 10);
+      return (memoryStore.video_exports || [])
+        .filter((e) => e.project_id === pId)
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+        .map((e) => ({ ...e }));
+    }
+
+    // VIDEO EXPORTS: single by id
+    if (lower.includes('from video_exports where id = ?')) {
+      const id = parseInt(params[0], 10);
+      return (memoryStore.video_exports || []).filter((e) => e.id === id).map((e) => ({ ...e }));
     }
 
     return [];
@@ -264,30 +290,96 @@ function executeInMemory(sql, params = []) {
 
   if (lower.startsWith('insert into video_projects')) {
     const id = memoryStore.autoId.video_projects++;
-    const [user_id, title, prompt, script, generation_type, style, language, duration_seconds, aspect_ratio, bg_music, voice_name, has_subtitles, target_platform] = params;
+    const colMatch = cleanSql.match(/insert\s+into\s+video_projects\s*\(([^)]+)\)/i);
+    const valMatch = cleanSql.match(/values\s*\(([^)]+)\)/i);
     const newProject = {
       id,
-      user_id,
-      title,
-      prompt,
-      script,
-      generation_type,
-      style,
-      language,
-      duration_seconds,
-      aspect_ratio,
+      user_id: 1,
+      title: 'Untitled Video Project',
+      prompt: '',
+      script: null,
+      generation_type: 'text_to_video',
+      style: 'cinematic',
+      language: 'English',
+      duration_seconds: 30,
+      aspect_ratio: '16:9',
       status: 'draft',
       error_message: null,
       thumbnail_url: null,
       video_url: null,
-      bg_music,
-      voice_name,
-      has_subtitles,
-      target_platform,
+      bg_music: 'ambient_cinematic',
+      voice_name: 'Alloy',
+      has_subtitles: 1,
+      target_platform: 'general',
+      audio_url: null,
+      audio_storage_key: null,
+      audio_metadata: null,
+      visual_theme: null,
+      transition_style: 'fade',
+      motion_enabled: 1,
+      render_settings: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
+
+    if (colMatch) {
+      const cols = colMatch[1].split(',').map((c) => c.trim().replace(/[`"']/g, ''));
+      const valTokens = valMatch ? valMatch[1].split(',').map((v) => v.trim()) : [];
+      let pIdx = 0;
+      cols.forEach((col, idx) => {
+        const token = valTokens[idx];
+        if (!token || token === '?') {
+          newProject[col] = params[pIdx++];
+        } else if (token.startsWith("'") && token.endsWith("'")) {
+          newProject[col] = token.slice(1, -1);
+        } else if (!isNaN(Number(token))) {
+          newProject[col] = Number(token);
+        } else {
+          newProject[col] = token;
+        }
+      });
+    } else {
+      const [user_id, title, prompt, script, generation_type, style, language, duration_seconds, aspect_ratio, bg_music, voice_name, has_subtitles, target_platform] = params;
+      Object.assign(newProject, { user_id, title, prompt, script, generation_type, style, language, duration_seconds, aspect_ratio, bg_music, voice_name, has_subtitles, target_platform });
+    }
     memoryStore.video_projects.unshift(newProject);
+    return { insertId: id, affectedRows: 1 };
+  }
+
+  if (lower.startsWith('insert into video_scenes')) {
+    const id = memoryStore.autoId.video_scenes++;
+    const match = cleanSql.match(/insert\s+into\s+video_scenes\s*\(([^)]+)\)/i);
+    const newScene = {
+      id,
+      project_id: 0,
+      scene_order: 0,
+      image_url: '',
+      thumbnail_url: null,
+      storage_key: null,
+      source_provider: 'upload',
+      source_id: null,
+      attribution_author: null,
+      attribution_url: null,
+      duration_seconds: 4.0,
+      transition_style: 'fade',
+      transition_duration: 0.5,
+      motion_effect: 'ken_burns_zoom_in',
+      caption_text: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    if (match) {
+      const cols = match[1].split(',').map((c) => c.trim().replace(/[`"']/g, ''));
+      cols.forEach((col, idx) => {
+        newScene[col] = params[idx];
+      });
+    } else {
+      const [project_id, scene_order, image_url, thumbnail_url, storage_key, source_provider, source_id, attribution_author, attribution_url, duration_seconds, transition_style, transition_duration, motion_effect, caption_text] = params;
+      Object.assign(newScene, { project_id, scene_order, image_url, thumbnail_url, storage_key, source_provider, source_id, attribution_author, attribution_url, duration_seconds, transition_style, transition_duration, motion_effect, caption_text });
+    }
+    if (!memoryStore.video_scenes) memoryStore.video_scenes = [];
+    memoryStore.video_scenes.push(newScene);
     return { insertId: id, affectedRows: 1 };
   }
 
@@ -401,8 +493,16 @@ function executeInMemory(sql, params = []) {
         p.video_url = params[0];
         p.thumbnail_url = params[1];
         p.duration_seconds = params[2];
+        p.error_message = null;
+      } else if (lower.includes("status = 'failed'")) {
+        p.status = 'failed';
+        if (params.length > 1) p.error_message = params[0];
+      } else if (lower.includes("status = 'cancelled'")) {
+        p.status = 'cancelled';
+        p.error_message = 'Generation cancelled by user';
       } else if (lower.includes("status = 'queued'")) {
         p.status = 'queued';
+        p.error_message = null;
       } else if (lower.includes("status = 'processing'")) {
         p.status = 'processing';
       } else if (lower.includes('video_url = ?') && lower.includes('aspect_ratio = ?')) {
@@ -454,7 +554,55 @@ function executeInMemory(sql, params = []) {
     return { affectedRows: 0 };
   }
 
+  if (lower.startsWith('update video_scenes')) {
+    const sId = parseInt(params[params.length - 1], 10);
+    const scene = (memoryStore.video_scenes || []).find((s) => s.id === sId);
+    if (scene) {
+      if (lower.includes('scene_order = ?') && lower.includes('duration_seconds = ?')) {
+        scene.scene_order = parseInt(params[0], 10);
+        scene.duration_seconds = parseFloat(params[1]);
+        scene.transition_style = params[2];
+        scene.motion_effect = params[3];
+        scene.caption_text = params[4];
+      } else if (lower.includes('scene_order = ?')) {
+        scene.scene_order = parseInt(params[0], 10);
+      } else if (lower.includes('duration_seconds = ?')) {
+        scene.duration_seconds = parseFloat(params[0]);
+      } else if (lower.includes('image_url = ?')) {
+        scene.image_url = params[0];
+        scene.thumbnail_url = params[1] || params[0];
+        scene.storage_key = params[2];
+        scene.source_provider = params[3];
+        scene.attribution_author = params[4];
+        scene.attribution_url = params[5];
+      }
+      scene.updated_at = new Date().toISOString();
+      return { affectedRows: 1 };
+    }
+    return { affectedRows: 0 };
+  }
+
   // 4. DELETE queries
+  if (lower.startsWith('delete from video_scenes where project_id = ?')) {
+    const pId = parseInt(params[0], 10);
+    if (memoryStore.video_scenes) {
+      memoryStore.video_scenes = memoryStore.video_scenes.filter((s) => s.project_id !== pId);
+    }
+    return { affectedRows: 1 };
+  }
+
+  if (lower.startsWith('delete from video_scenes where id = ?')) {
+    const sId = parseInt(params[0], 10);
+    if (memoryStore.video_scenes) {
+      const idx = memoryStore.video_scenes.findIndex((s) => s.id === sId);
+      if (idx !== -1) {
+        memoryStore.video_scenes.splice(idx, 1);
+        return { affectedRows: 1 };
+      }
+    }
+    return { affectedRows: 0 };
+  }
+
   if (lower.startsWith('delete from video_projects')) {
     const pId = parseInt(params[0], 10);
     const idx = memoryStore.video_projects.findIndex((p) => p.id === pId);

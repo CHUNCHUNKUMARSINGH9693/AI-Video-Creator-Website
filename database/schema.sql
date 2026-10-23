@@ -41,12 +41,12 @@ CREATE TABLE IF NOT EXISTS `video_projects` (
   `title` VARCHAR(255) NOT NULL,
   `prompt` TEXT NOT NULL,
   `script` MEDIUMTEXT NULL DEFAULT NULL,
-  `generation_type` ENUM('text_to_video', 'script_to_video', 'image_to_video', 'ai_scenes', 'media_to_video', 'voiceover_video') NOT NULL DEFAULT 'text_to_video',
+  `generation_type` ENUM('text_to_video', 'script_to_video', 'image_to_video', 'audio_to_video', 'ai_scenes', 'media_to_video', 'voiceover_video') NOT NULL DEFAULT 'text_to_video',
   `style` VARCHAR(80) NOT NULL DEFAULT 'cinematic',
   `language` VARCHAR(50) NOT NULL DEFAULT 'English',
   `duration_seconds` INT UNSIGNED NOT NULL DEFAULT 30,
   `aspect_ratio` ENUM('16:9', '9:16', '1:1') NOT NULL DEFAULT '16:9',
-  `status` ENUM('draft', 'queued', 'processing', 'completed', 'failed') NOT NULL DEFAULT 'draft',
+  `status` ENUM('draft', 'queued', 'processing', 'completed', 'failed', 'cancelled') NOT NULL DEFAULT 'draft',
   `error_message` TEXT NULL DEFAULT NULL,
   `thumbnail_url` VARCHAR(500) NULL DEFAULT NULL,
   `video_url` VARCHAR(500) NULL DEFAULT NULL,
@@ -54,6 +54,13 @@ CREATE TABLE IF NOT EXISTS `video_projects` (
   `voice_name` VARCHAR(100) NULL DEFAULT 'Alloy',
   `has_subtitles` TINYINT(1) NOT NULL DEFAULT 1,
   `target_platform` ENUM('general', 'youtube', 'instagram', 'facebook') NOT NULL DEFAULT 'general',
+  `audio_url` VARCHAR(500) NULL DEFAULT NULL,
+  `audio_storage_key` VARCHAR(500) NULL DEFAULT NULL,
+  `audio_metadata` JSON NULL DEFAULT NULL,
+  `visual_theme` VARCHAR(100) NULL DEFAULT NULL,
+  `transition_style` VARCHAR(50) NOT NULL DEFAULT 'fade',
+  `motion_enabled` TINYINT(1) NOT NULL DEFAULT 1,
+  `render_settings` JSON NULL DEFAULT NULL,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -102,6 +109,9 @@ CREATE TABLE IF NOT EXISTS `generation_jobs` (
   `progress_percentage` INT UNSIGNED NOT NULL DEFAULT 0,
   `current_step` VARCHAR(255) NULL DEFAULT 'Initializing generation pipeline',
   `error_message` TEXT NULL DEFAULT NULL,
+  `output_video_url` VARCHAR(500) NULL DEFAULT NULL,
+  `cancellation_requested` TINYINT(1) NOT NULL DEFAULT 0,
+  `render_settings` JSON NULL DEFAULT NULL,
   `started_at` DATETIME NULL DEFAULT NULL,
   `completed_at` DATETIME NULL DEFAULT NULL,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -202,6 +212,37 @@ CREATE TABLE IF NOT EXISTS `social_accounts` (
   CONSTRAINT `fk_social_accounts_user`
     FOREIGN KEY (`user_id`)
     REFERENCES `users` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ----------------------------------------------------------
+-- 9. Video Scenes Table (Audio-to-Video & Image-to-Video)
+-- ----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `video_scenes` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `project_id` INT UNSIGNED NOT NULL,
+  `scene_order` INT UNSIGNED NOT NULL DEFAULT 0,
+  `image_url` VARCHAR(500) NOT NULL,
+  `thumbnail_url` VARCHAR(500) NULL DEFAULT NULL,
+  `storage_key` VARCHAR(500) NULL DEFAULT NULL,
+  `source_provider` ENUM('upload', 'pexels', 'unsplash', 'ai') NOT NULL DEFAULT 'upload',
+  `source_id` VARCHAR(100) NULL DEFAULT NULL,
+  `attribution_author` VARCHAR(255) NULL DEFAULT NULL,
+  `attribution_url` VARCHAR(500) NULL DEFAULT NULL,
+  `duration_seconds` DECIMAL(6, 2) NOT NULL DEFAULT 4.00,
+  `transition_style` VARCHAR(50) NOT NULL DEFAULT 'fade',
+  `transition_duration` DECIMAL(4, 2) NOT NULL DEFAULT 0.50,
+  `motion_effect` VARCHAR(50) NOT NULL DEFAULT 'ken_burns_zoom_in',
+  `caption_text` TEXT NULL DEFAULT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_video_scenes_project_id` (`project_id`),
+  INDEX `idx_video_scenes_order` (`project_id`, `scene_order`),
+  CONSTRAINT `fk_video_scenes_project`
+    FOREIGN KEY (`project_id`)
+    REFERENCES `video_projects` (`id`)
     ON DELETE CASCADE
     ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

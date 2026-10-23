@@ -44,6 +44,54 @@ async function initDatabase() {
     await connection.query(schemaSql);
     console.log(`[InitDB] Schema applied successfully!`);
 
+    // Ensure new columns exist on video_projects if table already existed previously
+    const projectColumnsToEnsure = [
+      { name: 'audio_url', sql: 'ALTER TABLE `video_projects` ADD COLUMN `audio_url` VARCHAR(500) NULL DEFAULT NULL;' },
+      { name: 'audio_storage_key', sql: 'ALTER TABLE `video_projects` ADD COLUMN `audio_storage_key` VARCHAR(500) NULL DEFAULT NULL;' },
+      { name: 'audio_metadata', sql: 'ALTER TABLE `video_projects` ADD COLUMN `audio_metadata` JSON NULL DEFAULT NULL;' },
+      { name: 'visual_theme', sql: 'ALTER TABLE `video_projects` ADD COLUMN `visual_theme` VARCHAR(100) NULL DEFAULT NULL;' },
+      { name: 'transition_style', sql: "ALTER TABLE `video_projects` ADD COLUMN `transition_style` VARCHAR(50) NOT NULL DEFAULT 'fade';" },
+      { name: 'motion_enabled', sql: 'ALTER TABLE `video_projects` ADD COLUMN `motion_enabled` TINYINT(1) NOT NULL DEFAULT 1;' },
+      { name: 'render_settings', sql: 'ALTER TABLE `video_projects` ADD COLUMN `render_settings` JSON NULL DEFAULT NULL;' },
+    ];
+
+    for (const col of projectColumnsToEnsure) {
+      try {
+        const [colCheck] = await connection.query(
+          `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'video_projects' AND COLUMN_NAME = ?`,
+          [database, col.name]
+        );
+        if (colCheck.length === 0) {
+          await connection.query(col.sql);
+          console.log(`[InitDB] Added column ${col.name} to video_projects`);
+        }
+      } catch (e) {
+        console.warn(`[InitDB] Column migration notice for ${col.name}:`, e.message);
+      }
+    }
+
+    // Ensure new columns on generation_jobs
+    const jobColumnsToEnsure = [
+      { name: 'output_video_url', sql: 'ALTER TABLE `generation_jobs` ADD COLUMN `output_video_url` VARCHAR(500) NULL DEFAULT NULL;' },
+      { name: 'cancellation_requested', sql: 'ALTER TABLE `generation_jobs` ADD COLUMN `cancellation_requested` TINYINT(1) NOT NULL DEFAULT 0;' },
+      { name: 'render_settings', sql: 'ALTER TABLE `generation_jobs` ADD COLUMN `render_settings` JSON NULL DEFAULT NULL;' },
+    ];
+
+    for (const col of jobColumnsToEnsure) {
+      try {
+        const [colCheck] = await connection.query(
+          `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'generation_jobs' AND COLUMN_NAME = ?`,
+          [database, col.name]
+        );
+        if (colCheck.length === 0) {
+          await connection.query(col.sql);
+          console.log(`[InitDB] Added column ${col.name} to generation_jobs`);
+        }
+      } catch (e) {
+        console.warn(`[InitDB] Job column migration notice for ${col.name}:`, e.message);
+      }
+    }
+
     // 4. Seed demo user if not existing
     const [existingUsers] = await connection.query('SELECT id, email FROM users WHERE email = ?', ['demo@aivideocreator.com']);
     if (existingUsers.length === 0) {

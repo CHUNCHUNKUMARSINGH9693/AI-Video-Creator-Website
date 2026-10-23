@@ -10,6 +10,8 @@ const diskStorage = multer.diskStorage({
       dest = storage.DIRECTORIES.avatars;
     } else if (file.fieldname === 'audio') {
       dest = storage.DIRECTORIES.audio;
+    } else if (file.fieldname === 'image') {
+      dest = storage.DIRECTORIES.images;
     }
     cb(null, dest);
   },

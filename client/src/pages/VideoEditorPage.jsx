@@ -21,6 +21,7 @@ import api from '../services/api';
 import { useToast } from '../context/ToastContext';
 import VideoPlayer from '../components/common/VideoPlayer';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import DownloadButton from '../components/media/DownloadButton';
 
 export default function VideoEditorPage() {
   const { id } = useParams();
@@ -230,15 +231,7 @@ export default function VideoEditorPage() {
             <Share2 className="w-4 h-4" />
             Social Export Studio
           </Link>
-          <a
-            href={`/api/videos/${id}/download`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-dark-card hover:bg-slate-800 text-slate-200 text-xs font-semibold border border-dark-border transition-colors"
-          >
-            <Download className="w-4 h-4" />
-            Download MP4
-          </a>
+          <DownloadButton project={project} buttonSize="md" />
         </div>
       </div>
 

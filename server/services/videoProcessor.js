@@ -28,6 +28,19 @@ const DIMENSIONS = {
   '1:1': { width: 720, height: 720 },
 };
 
+const RESOLUTION_DIMENSIONS = {
+  '1080p': {
+    '16:9': { width: 1920, height: 1080 },
+    '9:16': { width: 1080, height: 1920 },
+    '1:1': { width: 1080, height: 1080 },
+  },
+  '720p': {
+    '16:9': { width: 1280, height: 720 },
+    '9:16': { width: 720, height: 1280 },
+    '1:1': { width: 720, height: 720 },
+  },
+};
+
 /**
  * Color palettes for different styles
  */
@@ -167,6 +180,41 @@ function resizeVideo(inputPath, outputPath, targetAspectRatio = '16:9') {
 }
 
 /**
+ * Export or adapt video to target resolution (1080p, 720p) and aspect ratio (16:9, 9:16, 1:1)
+ * Uses yuv420p pixel format for universal compatibility with iOS Safari, QuickTime, Android, and Windows Media Player.
+ */
+function exportCustomVideo({
+  inputPath,
+  outputPath,
+  targetAspectRatio = '16:9',
+  targetResolution = '1080p',
+}) {
+  return new Promise((resolve, reject) => {
+    const resMap = RESOLUTION_DIMENSIONS[targetResolution] || RESOLUTION_DIMENSIONS['1080p'];
+    const dim = resMap[targetAspectRatio] || resMap['16:9'];
+    const w = dim.width;
+    const h = dim.height;
+
+    const filter = `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:black`;
+
+    ffmpeg(inputPath)
+      .videoFilters(filter)
+      .output(outputPath)
+      .videoCodec('libx264')
+      .audioCodec('aac')
+      .outputOptions([
+        '-preset ultrafast',
+        '-pix_fmt yuv420p',
+        '-b:a 192k',
+        '-movflags +faststart',
+      ])
+      .on('end', () => resolve(outputPath))
+      .on('error', (err) => reject(err))
+      .run();
+  });
+}
+
+/**
  * Mix background music or voiceover into video
  */
 function mixAudio(videoPath, audioPath, outputPath, musicVolume = 0.5) {
@@ -225,8 +273,8 @@ function generateSyntheticVideo({
     // 3. Smooth fade-in and fade-out
     const audioFilter = `aevalsrc=sin(220*2*PI*t)*0.15+sin(330*2*PI*t)*0.1+sin(440*2*PI*t)*0.08:d=${dur}`;
 
-    // Visual: animated color gradient test source with box blur and vignette
-    const videoFilter = `testsrc=duration=${dur}:size=${w}x${h}:rate=30,drawbox=x=0:y=0:w=${w}:h=${h}:color=${palette.bg1}@0.7:t=fill,vignette=PI/4,fade=t=in:st=0:d=1,fade=t=out:st=${dur - 1}:d=1`;
+    // Visual: cinematic ambient background with vignette and smooth fades
+    const videoFilter = `color=c=${palette.bg1}:size=${w}x${h}:duration=${dur},vignette=PI/4,fade=t=in:st=0:d=1,fade=t=out:st=${dur - 1}:d=1`;
 
     let cmd = ffmpeg()
       .input(videoFilter)
@@ -265,8 +313,374 @@ function generateSyntheticVideo({
   });
 }
 
+/**
+ * Render a complete slideshow video from scenes with Ken Burns pan/zoom effects,
+ * transitions, synchronized audio track, and subtitles.
+ */
+async function renderSlideshowVideo({
+  projectId,
+  scenes = [],
+  audioPath = null,
+  aspectRatio = '16:9',
+  style = 'cinematic',
+  hasSubtitles = true,
+  outputPath,
+  onProgress = null,
+  isCancelled = () => false,
+  registerProcess = null,
+}) {
+  const dim = DIMENSIONS[aspectRatio] || DIMENSIONS['16:9'];
+  const w = dim.width;
+  const h = dim.height;
+
+  if (!scenes || scenes.length === 0) {
+    throw new Error('Cannot render video: at least one scene image is required.');
+  }
+
+  // Ensure output directory exists
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  fs.mkdirSync(storage.DIRECTORIES.temp, { recursive: true });
+
+  const tempClips = [];
+  let currentActiveCommand = null;
+
+  if (registerProcess) {
+    registerProcess(() => {
+      if (currentActiveCommand) {
+        try {
+          currentActiveCommand.kill('SIGKILL');
+        } catch (e) {}
+      }
+      // Clean up temp clips
+      tempClips.forEach((clip) => {
+        try {
+          if (fs.existsSync(clip)) fs.unlinkSync(clip);
+        } catch (e) {}
+      });
+    });
+  }
+
+  try {
+    if (onProgress) onProgress(8, 'Preparing media assets and downloading images...');
+
+    // 1. Download or verify local image file for each scene
+    const preparedScenes = [];
+    for (let i = 0; i < scenes.length; i++) {
+      if (isCancelled()) throw new Error('Generation cancelled by user');
+
+      const scene = scenes[i];
+      let localImagePath = null;
+      const targetStorageKey = scene.storage_key || scene.storageKey;
+      const targetImageUrl = scene.image_url || scene.imageUrl;
+
+      // Check if image is local in storage
+      if (targetStorageKey && fs.existsSync(storage.getAbsolutePath(targetStorageKey))) {
+        localImagePath = storage.getAbsolutePath(targetStorageKey);
+      } else if (targetImageUrl) {
+        if (targetImageUrl.startsWith('/uploads/') || targetImageUrl.startsWith('uploads/')) {
+          const localRel = targetImageUrl.replace(/^\//, '');
+          const abs = storage.getAbsolutePath(localRel);
+          if (fs.existsSync(abs)) {
+            localImagePath = abs;
+          }
+        }
+
+        // If not found locally, download from remote URL
+        if (!localImagePath && targetImageUrl.startsWith('http')) {
+          try {
+            const downloaded = await storage.downloadRemoteFile(
+              targetImageUrl,
+              storage.DIRECTORIES.images,
+              `scene_${projectId}_${i}`
+            );
+            localImagePath = downloaded.absolutePath;
+          } catch (dlErr) {
+            console.warn('[VideoProcessor] Remote image download failed:', dlErr.message);
+          }
+        }
+      }
+
+      if (!localImagePath || !fs.existsSync(localImagePath)) {
+        // Fallback to sample or synthetic canvas
+        const sampleDir = storage.DIRECTORIES.samples;
+        const fallbackPng = path.join(storage.DIRECTORIES.temp, `fallback_${projectId}_${i}.png`);
+        await new Promise((res, rej) => {
+          ffmpeg()
+            .input(`color=c=0x1e1b4b:s=${w}x${h}:d=1`)
+            .inputFormat('lavfi')
+            .frames(1)
+            .output(fallbackPng)
+            .on('end', () => res(fallbackPng))
+            .on('error', (err) => rej(err))
+            .run();
+        });
+        localImagePath = fallbackPng;
+      }
+
+      preparedScenes.push({
+        ...scene,
+        localImagePath,
+        duration: Math.max(1, parseFloat(scene.duration_seconds || scene.duration || 4)),
+        motionEffect: scene.motion_effect || scene.motionEffect || 'ken_burns_zoom_in',
+        transitionStyle: scene.transition_style || scene.transitionStyle || 'fade',
+        captionText: scene.caption_text || scene.captionText || '',
+      });
+    }
+
+    const totalDuration = preparedScenes.reduce((acc, s) => acc + s.duration, 0);
+
+    // 2. Render each scene segment with Ken Burns motion effect
+    for (let i = 0; i < preparedScenes.length; i++) {
+      if (isCancelled()) throw new Error('Generation cancelled by user');
+
+      const scene = preparedScenes[i];
+      const clipOutput = path.join(storage.DIRECTORIES.temp, `clip_${projectId}_${i}_${Date.now()}.mp4`);
+      tempClips.push(clipOutput);
+
+      const progressBase = 15;
+      const progressRange = 55;
+      const sceneProgress = Math.round(progressBase + (i / preparedScenes.length) * progressRange);
+      const friendlyMotion = (scene.motionEffect || 'zoom in').replace(/_/g, ' ');
+
+      if (onProgress) {
+        onProgress(sceneProgress, `Rendering scene ${i + 1} of ${preparedScenes.length} (${friendlyMotion})...`);
+      }
+
+      await new Promise((resolve, reject) => {
+        const dur = scene.duration;
+        const frames = Math.max(30, Math.round(dur * 30));
+
+        // Motion filter graph
+        let filter = '';
+        if (scene.motionEffect === 'ken_burns_zoom_out') {
+          filter = `scale=${w * 2}:${h * 2}:force_original_aspect_ratio=increase,crop=${w * 2}:${h * 2},zoompan=z='max(1.2-0.0012*on,1.0)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frames}:s=${w}x${h}:fps=30`;
+        } else if (scene.motionEffect === 'pan_left') {
+          filter = `scale=${w * 2}:${h * 2}:force_original_aspect_ratio=increase,crop=${w * 2}:${h * 2},zoompan=z=1.15:x='(1-on/${frames})*(iw-iw/zoom)':y='(ih-ih/zoom)/2':d=${frames}:s=${w}x${h}:fps=30`;
+        } else if (scene.motionEffect === 'pan_right') {
+          filter = `scale=${w * 2}:${h * 2}:force_original_aspect_ratio=increase,crop=${w * 2}:${h * 2},zoompan=z=1.15:x='(on/${frames})*(iw-iw/zoom)':y='(ih-ih/zoom)/2':d=${frames}:s=${w}x${h}:fps=30`;
+        } else if (scene.motionEffect === 'static') {
+          filter = `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:black`;
+        } else {
+          // Default: ken_burns_zoom_in
+          filter = `scale=${w * 2}:${h * 2}:force_original_aspect_ratio=increase,crop=${w * 2}:${h * 2},zoompan=z='min(zoom+0.0015,1.2)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frames}:s=${w}x${h}:fps=30`;
+        }
+
+        // Apply smooth fade transition if requested and duration permits
+        if (scene.transitionStyle === 'fade' && dur > 1.2) {
+          filter += `,fade=t=in:st=0:d=0.35,fade=t=out:st=${Math.max(0.35, dur - 0.35)}:d=0.35`;
+        }
+
+        const cmd = ffmpeg()
+          .input(scene.localImagePath)
+          .loop(dur)
+          .videoFilters(filter)
+          .outputOptions([
+            '-c:v libx264',
+            '-preset ultrafast',
+            '-pix_fmt yuv420p',
+            '-t', `${dur}`,
+            '-r 30',
+          ])
+          .output(clipOutput);
+
+        currentActiveCommand = cmd;
+
+        cmd
+          .on('end', () => {
+            currentActiveCommand = null;
+            resolve(clipOutput);
+          })
+          .on('error', (err) => {
+            currentActiveCommand = null;
+            reject(err);
+          })
+          .run();
+      });
+    }
+
+    if (isCancelled()) throw new Error('Generation cancelled by user');
+
+    // 3. Concatenate video clips
+    if (onProgress) onProgress(75, 'Assembling scene sequences and crossfades...');
+
+    const concatTxtPath = path.join(storage.DIRECTORIES.temp, `concat_${projectId}_${Date.now()}.txt`);
+    tempClips.push(concatTxtPath);
+
+    const concatContent = tempClips
+      .filter((c) => c.endsWith('.mp4'))
+      .map((clip) => `file '${clip.replace(/\\/g, '/')}'`)
+      .join('\n');
+
+    fs.writeFileSync(concatTxtPath, concatContent);
+
+    const videoOnlyOutput = path.join(storage.DIRECTORIES.temp, `visuals_${projectId}_${Date.now()}.mp4`);
+    tempClips.push(videoOnlyOutput);
+
+    await new Promise((resolve, reject) => {
+      const cmd = ffmpeg()
+        .input(concatTxtPath)
+        .inputOptions(['-f concat', '-safe 0'])
+        .outputOptions(['-c copy'])
+        .output(videoOnlyOutput);
+
+      currentActiveCommand = cmd;
+
+      cmd
+        .on('end', () => {
+          currentActiveCommand = null;
+          resolve(videoOnlyOutput);
+        })
+        .on('error', (err) => {
+          currentActiveCommand = null;
+          reject(err);
+        })
+        .run();
+    });
+
+    if (isCancelled()) throw new Error('Generation cancelled by user');
+
+    // 4. Synchronize Audio Track (preserve uploaded audio or mix harmonic soundtrack)
+    if (onProgress) onProgress(85, 'Synchronizing audio soundtrack and master timeline...');
+
+    const finalVideoPath = outputPath;
+    let audioValid = false;
+
+    if (audioPath && fs.existsSync(audioPath)) {
+      try {
+        const meta = await getVideoMetadata(audioPath);
+        if (meta.duration > 0) {
+          audioValid = true;
+        }
+      } catch (e) {
+        audioValid = true; // Still attempt muxing
+      }
+    }
+
+    await new Promise((resolve, reject) => {
+      let cmd = ffmpeg().input(videoOnlyOutput);
+
+      if (audioValid) {
+        // Use user's audio track, trim or loop to match video, apply subtle end fade-out
+        cmd
+          .input(audioPath)
+          .outputOptions([
+            '-c:v copy',
+            '-c:a aac',
+            '-b:a 192k',
+            '-map 0:v:0',
+            '-map 1:a:0',
+            `-t ${totalDuration}`,
+            `-af afade=t=out:st=${Math.max(1, totalDuration - 1)}:d=1`,
+            '-movflags +faststart',
+          ]);
+      } else {
+        // Generate high-quality harmonic ambient synth chord progression
+        const audioSynth = `aevalsrc=sin(220*2*PI*t)*0.12+sin(330*2*PI*t)*0.08+sin(440*2*PI*t)*0.05:d=${totalDuration}`;
+        cmd
+          .input(audioSynth)
+          .inputFormat('lavfi')
+          .outputOptions([
+            '-c:v copy',
+            '-c:a aac',
+            '-b:a 128k',
+            `-t ${totalDuration}`,
+            '-shortest',
+            '-movflags +faststart',
+          ]);
+      }
+
+      cmd.output(finalVideoPath);
+      currentActiveCommand = cmd;
+
+      cmd
+        .on('end', () => {
+          currentActiveCommand = null;
+          resolve(finalVideoPath);
+        })
+        .on('error', (err) => {
+          currentActiveCommand = null;
+          reject(err);
+        })
+        .run();
+    });
+
+    if (isCancelled()) throw new Error('Generation cancelled by user');
+
+    // 5. Extract poster thumbnail frame
+    if (onProgress) onProgress(95, 'Generating high-resolution poster thumbnail...');
+    const thumbFilename = `thumb_${projectId}_${Date.now()}.jpg`;
+    const thumbPath = path.join(storage.DIRECTORIES.thumbnails, thumbFilename);
+    const thumbStorageKey = path.relative(path.resolve(__dirname, '../../'), thumbPath).replace(/\\/g, '/');
+
+    try {
+      await extractThumbnail(finalVideoPath, thumbPath, Math.min(1.0, totalDuration / 2));
+    } catch (thumbErr) {
+      console.warn('[VideoProcessor] Thumbnail extraction fallback:', thumbErr.message);
+    }
+
+    // 6. Generate timed subtitles if captions present
+    let srtStorageKey = null;
+    const hasCaptions = preparedScenes.some((s) => s.captionText && s.captionText.trim().length > 0);
+    if (hasSubtitles && hasCaptions) {
+      try {
+        let currentTime = 0;
+        let srtContent = '';
+        preparedScenes.forEach((s, idx) => {
+          if (!s.captionText) return;
+          const start = currentTime;
+          const end = currentTime + s.duration;
+
+          const formatTime = (secs) => {
+            const h = Math.floor(secs / 3600).toString().padStart(2, '0');
+            const m = Math.floor((secs % 3600) / 60).toString().padStart(2, '0');
+            const sec = Math.floor(secs % 60).toString().padStart(2, '0');
+            const ms = Math.floor((secs % 1) * 1000).toString().padStart(3, '0');
+            return `${h}:${m}:${sec},${ms}`;
+          };
+
+          srtContent += `${idx + 1}\n`;
+          srtContent += `${formatTime(start)} --> ${formatTime(end)}\n`;
+          srtContent += `${s.captionText.trim()}\n\n`;
+
+          currentTime = end;
+        });
+
+        if (srtContent.trim().length > 0) {
+          const srtFilename = `sub_${projectId}_${Date.now()}.srt`;
+          const srtPath = path.join(storage.DIRECTORIES.subtitles, srtFilename);
+          fs.writeFileSync(srtPath, srtContent, 'utf8');
+          srtStorageKey = path.relative(path.resolve(__dirname, '../../'), srtPath).replace(/\\/g, '/');
+        }
+      } catch (srtErr) {
+        console.warn('[VideoProcessor] Subtitle generation warning:', srtErr.message);
+      }
+    }
+
+    if (onProgress) onProgress(100, 'Video rendered successfully!');
+
+    return {
+      videoPath: finalVideoPath,
+      videoStorageKey: path.relative(path.resolve(__dirname, '../../'), finalVideoPath).replace(/\\/g, '/'),
+      thumbPath,
+      thumbStorageKey,
+      srtStorageKey,
+      duration: totalDuration,
+      aspectRatio,
+      sceneCount: preparedScenes.length,
+    };
+  } finally {
+    // Cleanup temp clips
+    tempClips.forEach((file) => {
+      try {
+        if (fs.existsSync(file)) fs.unlinkSync(file);
+      } catch (e) {}
+    });
+  }
+}
+
 module.exports = {
   DIMENSIONS,
+  RESOLUTION_DIMENSIONS,
   STYLE_PALETTES,
   ffmpegPath,
   ffprobePath,
@@ -274,7 +688,10 @@ module.exports = {
   extractThumbnail,
   trimVideo,
   resizeVideo,
+  exportCustomVideo,
   mixAudio,
   generateSrtContent,
   generateSyntheticVideo,
+  renderSlideshowVideo,
 };
+

@@ -15,6 +15,8 @@ import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import DashboardPage from './pages/DashboardPage';
 import CreateVideoPage from './pages/CreateVideoPage';
+import AudioToVideoPage from './pages/AudioToVideoPage';
+import ImageToVideoPage from './pages/ImageToVideoPage';
 import VideoEditorPage from './pages/VideoEditorPage';
 import VideoLibraryPage from './pages/VideoLibraryPage';
 import ExportSocialPage from './pages/ExportSocialPage';
@@ -49,6 +51,8 @@ export default function App() {
             >
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/create" element={<CreateVideoPage />} />
+              <Route path="/create/audio-to-video" element={<AudioToVideoPage />} />
+              <Route path="/create/image-to-video" element={<ImageToVideoPage />} />
               <Route path="/library" element={<VideoLibraryPage />} />
               <Route path="/editor/:id" element={<VideoEditorPage />} />
               <Route path="/export/:id" element={<ExportSocialPage />} />

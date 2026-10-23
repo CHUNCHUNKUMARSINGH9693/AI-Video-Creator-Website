@@ -327,9 +327,9 @@ export default function ExportSocialPage() {
                   <CheckCircle2 className="w-4 h-4" /> Export Ready ({(currentExport.fileSize / 1024 / 1024).toFixed(2)} MB)
                 </span>
                 <a
-                  href={currentExport.downloadUrl}
-                  download
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md transition-colors"
+                  href={`/api/videos/${id}/download?export_id=${currentExport.id}&token=${encodeURIComponent(localStorage.getItem('token') || '')}&filename=${encodeURIComponent(`ai-video-creator-${(project?.title || 'video').replace(/[^a-z0-9_-]/gi, '_')}-${platform}-${presetType}.mp4`)}`}
+                  download={`ai-video-creator-${(project?.title || 'video').replace(/[^a-z0-9_-]/gi, '_')}-${platform}-${presetType}.mp4`}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md transition-colors"
                 >
                   <Download className="w-3.5 h-3.5" /> Download MP4
                 </a>

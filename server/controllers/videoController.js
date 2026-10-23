@@ -114,11 +114,18 @@ async function getVideoById(req, res) {
       [id]
     );
 
+    // Get scenes
+    const scenes = await db.query(
+      `SELECT * FROM video_scenes WHERE project_id = ? ORDER BY scene_order ASC`,
+      [id]
+    );
+
     return res.json({
       success: true,
       project: {
         ...project,
         assets,
+        scenes,
         latestJob: jobs[0] || null,
         subtitles: subtitles[0] || null,
       },

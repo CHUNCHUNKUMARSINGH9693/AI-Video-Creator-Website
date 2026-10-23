@@ -23,6 +23,7 @@ import { useToast } from '../context/ToastContext';
 import Badge from '../components/common/Badge';
 import Modal from '../components/common/Modal';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import DownloadButton from '../components/media/DownloadButton';
 
 export default function VideoLibraryPage() {
   const navigate = useNavigate();
@@ -596,14 +597,7 @@ export default function VideoLibraryPage() {
                 >
                   Open Editor
                 </Link>
-                <a
-                  href={`/api/videos/${previewProject.id}/download`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 hover:text-white"
-                >
-                  Download
-                </a>
+                <DownloadButton project={previewProject} buttonSize="sm" />
               </div>
             </div>
           </div>

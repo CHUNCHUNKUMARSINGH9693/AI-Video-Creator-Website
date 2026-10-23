@@ -2,6 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const storage = require('./storageService');
 const videoProcessor = require('./videoProcessor');
+const imageSearchService = require('./imageSearchService');
 
 /**
  * Base AI Video Provider Interface
@@ -59,23 +60,65 @@ class DemoVideoProvider extends BaseVideoProvider {
     const thumbFullPath = storage.getAbsolutePath(thumbStorageKey);
     const srtFullPath = storage.getAbsolutePath(srtStorageKey);
 
-    updateProgress(20, 'Synthesizing kinetic motion vectors and visuals');
+    updateProgress(15, 'Synthesizing scene visuals and matching cinematic photography');
 
-    // 1. Generate real MP4 video with custom duration and aspect ratio
-    await videoProcessor.generateSyntheticVideo({
-      title: project.title,
-      prompt: project.prompt,
-      duration: project.duration_seconds || 15,
-      aspectRatio: project.aspect_ratio || '16:9',
-      style: project.style || 'cinematic',
-      outputPath: videoFullPath,
-      onProgress: (pct) => {
-        const mappedProgress = 20 + Math.floor(pct * 0.55); // 20% to 75%
-        updateProgress(mappedProgress, `Encoding frames (${pct}%)`);
-      },
-    });
+    // 1. Generate real MP4 video with real visuals
+    let renderSuccess = false;
+    try {
+      const searchRes = await imageSearchService.searchPhotos({
+        query: project.prompt || project.title || 'cinematic',
+        perPage: 3,
+        orientation: project.aspect_ratio === '9:16' ? 'portrait' : 'landscape',
+      });
+      if (searchRes && searchRes.images && searchRes.images.length > 0) {
+        const motionList = ['ken_burns_zoom_in', 'pan_left', 'ken_burns_zoom_out'];
+        const perDur = Math.max(3, Math.round((project.duration_seconds || 15) / searchRes.images.length));
+        const scenes = searchRes.images.slice(0, 3).map((img, idx) => ({
+          scene_order: idx,
+          imageUrl: img.url,
+          attributionAuthor: img.photographer,
+          attributionUrl: img.photographerUrl,
+          duration: perDur,
+          motionEffect: motionList[idx % motionList.length],
+          transitionStyle: 'fade',
+          captionText: idx === 0 ? (project.title || '') : (project.prompt?.slice(0, 50) || ''),
+        }));
 
-    updateProgress(80, 'Extracting high-resolution thumbnail frame');
+        await videoProcessor.renderSlideshowVideo({
+          projectId: project.id,
+          scenes,
+          audioPath: null,
+          aspectRatio: project.aspect_ratio || '16:9',
+          style: project.style || 'cinematic',
+          hasSubtitles: !!project.has_subtitles,
+          outputPath: videoFullPath,
+          onProgress: (pct, step) => {
+            const mappedProgress = Math.min(95, Math.round(pct));
+            updateProgress(mappedProgress, step || `Rendering AI video (${pct}%)`);
+          },
+        });
+        renderSuccess = true;
+      }
+    } catch (e) {
+      console.warn('[DemoProvider] Slideshow render fallback:', e.message);
+    }
+
+    if (!renderSuccess) {
+      await videoProcessor.generateSyntheticVideo({
+        title: project.title,
+        prompt: project.prompt,
+        duration: project.duration_seconds || 15,
+        aspectRatio: project.aspect_ratio || '16:9',
+        style: project.style || 'cinematic',
+        outputPath: videoFullPath,
+        onProgress: (pct) => {
+          const mappedProgress = 20 + Math.floor(pct * 0.55);
+          updateProgress(mappedProgress, `Encoding frames (${pct}%)`);
+        },
+      });
+    }
+
+    updateProgress(85, 'Extracting high-resolution thumbnail frame');
 
     // 2. Generate real thumbnail
     try {
