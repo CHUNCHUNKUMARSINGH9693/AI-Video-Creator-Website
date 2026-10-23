@@ -167,13 +167,13 @@ export default function AudioToVideoPage() {
   const handleAudioSelected = async (file) => {
     if (!file) return;
 
-    // Validate type
-    const validExtensions = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac'];
+    // Validate type against extensive audio formats
+    const validExtensions = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac', '.wma', '.aiff', '.aif', '.opus', '.weba', '.webm'];
     const fileNameLower = file.name.toLowerCase();
     const hasValidExt = validExtensions.some((ext) => fileNameLower.endsWith(ext));
 
-    if (!hasValidExt && !file.type.startsWith('audio/')) {
-      toast.error('Please upload a supported audio format (MP3, WAV, AAC, M4A, OGG).');
+    if (!hasValidExt && !file.type.startsWith('audio/') && !file.type.includes('ogg') && !file.type.includes('m4a')) {
+      toast.error('Please upload a supported audio format (MP3, WAV, AAC, M4A, OGG, FLAC).');
       return;
     }
 
@@ -207,11 +207,12 @@ export default function AudioToVideoPage() {
           setScenes(analysis.scenes);
         }
 
-        toast.success(`Audio parsed! Duration: ${Math.round(res.data.metadata.duration)}s`);
+        toast.success(`Audio parsed! Duration: ${Math.round(res.data.metadata.duration)}s with ${analysis?.scenes?.length || 0} synchronized scenes`);
       }
     } catch (err) {
       console.error('Audio analysis error:', err);
-      toast.error(err.response?.data?.message || 'Failed to analyze audio file.');
+      const errMsg = err.response?.data?.message || err.message || 'Failed to analyze audio file.';
+      toast.error(errMsg);
     } finally {
       setIsAnalyzingAudio(false);
     }
@@ -485,7 +486,7 @@ export default function AudioToVideoPage() {
                   {audioFile ? 'Change Audio File' : 'Browse Audio File'}
                   <input
                     type="file"
-                    accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"
+                    accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.wma,.aiff,.aif,.opus,.weba"
                     onChange={(e) => e.target.files?.[0] && handleAudioSelected(e.target.files[0])}
                     className="hidden"
                   />

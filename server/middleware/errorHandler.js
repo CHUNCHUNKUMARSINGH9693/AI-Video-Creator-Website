@@ -17,6 +17,19 @@ function errorHandler(err, req, res, next) {
     });
   }
 
+  // File filter validation errors (e.g. Unsupported format)
+  if (err.message && (
+    err.message.includes('Unsupported audio format') ||
+    err.message.includes('Unsupported image format') ||
+    err.message.includes('Unsupported file type') ||
+    err.message.includes('Invalid audio')
+  )) {
+    return res.status(400).json({
+      success: false,
+      message: err.message,
+    });
+  }
+
   // MySQL errors
   if (err.code === 'ER_DUP_ENTRY') {
     return res.status(409).json({

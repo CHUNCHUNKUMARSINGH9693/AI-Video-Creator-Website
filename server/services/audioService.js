@@ -83,16 +83,22 @@ class AudioService {
           return reject(new Error('Uploaded file contains no readable audio streams.'));
         }
 
-        const duration = parseFloat(format.duration || audioStream?.duration || 0);
+        let duration = parseFloat(format.duration || audioStream?.duration || 0);
+        const rawBitrate = parseInt(format.bit_rate || audioStream?.bit_rate || 0, 10);
 
-        if (duration <= 0.2) {
-          return reject(new Error('Audio file is too short (minimum 1 second required).'));
+        // Fallback duration estimation from file size and bitrate if container duration missing
+        if ((!Number.isFinite(duration) || duration <= 0.2) && format.size && rawBitrate > 0) {
+          duration = (format.size * 8) / rawBitrate;
         }
 
-        const sampleRate = parseInt(audioStream?.sample_rate || 44100, 10);
-        const channels = parseInt(audioStream?.channels || 2, 10);
-        const bitrate = parseInt(format.bit_rate || audioStream?.bit_rate || 128000, 10);
-        const codec = audioStream?.codec_name || 'mp3';
+        if (!Number.isFinite(duration) || duration <= 0.2) {
+          return reject(new Error('Audio file duration is too short or could not be detected. Please upload an audio file at least 1 second long.'));
+        }
+
+        const sampleRate = parseInt(audioStream?.sample_rate || 44100, 10) || 44100;
+        const channels = parseInt(audioStream?.channels || 2, 10) || 2;
+        const bitrate = rawBitrate > 0 ? Math.round(rawBitrate / 1000) : 128; // in kbps
+        const codec = audioStream?.codec_name || (format.format_name ? format.format_name.split(',')[0] : 'audio');
 
         // Generate synthetic waveform peaks (50 data points, normalized 0.15 - 0.95)
         const waveform = this.generateWaveformPeaks(duration);
@@ -101,7 +107,7 @@ class AudioService {
           duration: Math.round(duration * 100) / 100,
           sampleRate,
           channels,
-          bitrate: Math.round(bitrate / 1000), // in kbps
+          bitrate,
           codec,
           sizeBytes: format.size || 0,
           formatName: format.format_name || 'audio',
@@ -228,7 +234,21 @@ class AudioService {
       // Fallback image if search returned null
       if (!imageResult) {
         const fallbackRes = imageSearch.searchCuratedLibrary(visualTheme, i + 1, 1);
-        imageResult = fallbackRes.images[0];
+        if (fallbackRes && fallbackRes.images && fallbackRes.images.length > 0) {
+          imageResult = fallbackRes.images[0];
+        }
+      }
+
+      // Ultimate safeguard to guarantee a valid image
+      if (!imageResult || !imageResult.url) {
+        imageResult = {
+          url: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1600&q=80',
+          thumbUrl: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=400&q=80',
+          provider: 'curated_library',
+          id: `curated_fallback_${i}`,
+          photographer: 'Royalty-Free Creator',
+          photographerUrl: 'https://unsplash.com',
+        };
       }
 
       const caption = sentences[i] || template.caption || `Scene ${i + 1}`;

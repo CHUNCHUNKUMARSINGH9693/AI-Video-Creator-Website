@@ -38,7 +38,10 @@ uploads/images/*.png
 uploads/images/*.jpg
 uploads/images/*.jpeg
 uploads/images/*.webp
-uploads/audio/*.mp3
+uploads/audio/*
+!uploads/audio/.gitkeep
+!uploads/audio/test_audio.mp3
+!uploads/audio/test_audio.m4a
 uploads/subtitles/*.srt
 uploads/thumbnails/*.jpg
 uploads/thumbnails/*.png
